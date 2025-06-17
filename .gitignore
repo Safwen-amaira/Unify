@@ -8,7 +8,9 @@ node_modules/
 dist/
 web-build/
 expo-env.d.ts
-
+supabase.js
+lib/
+/lib/
 # Native
 .kotlin/
 *.orig.*

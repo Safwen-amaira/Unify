@@ -4,6 +4,7 @@
     "slug": "Unify",
     "version": "1.0.0",
     "orientation": "portrait",
+    "scheme": "myapp",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -13,9 +14,14 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Allow access to photos to select profile pictures",
+        "NSPhotoLibraryAddUsageDescription": "Allow access to save photos to your library"
+      },
       "supportsTablet": true
     },
     "android": {
+      "permissions": ["READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -24,6 +30,10 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ]
   }
 }
