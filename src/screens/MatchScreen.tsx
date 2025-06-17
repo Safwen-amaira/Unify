@@ -452,7 +452,6 @@ const handleAction = async (action) => {
     
     return (
       <>
-        {/* Like Animation (shown over all layers) */}
         {showLikeAnimation && (
           <View style={styles.overlayAnimationContainer}>
             <LottieView
@@ -464,7 +463,6 @@ const handleAction = async (action) => {
           </View>
         )}
         
-        {/* Nope Animation (shown over all layers) */}
         {showNopeAnimation && (
           <View style={styles.overlayAnimationContainer}>
             <LottieView
@@ -593,13 +591,20 @@ const handleAction = async (action) => {
     style={styles.actionButton} 
     onPress={() => handleAction('pass')}
     activeOpacity={0.7}
-  > <LottieView
+    
+  >
+    
+        <View style={styles.buttonCircle}>
+
+ <LottieView
                   ref={ref => badgeAnimations.current.star = ref}
                   source={require('../../assets/animations/nope.json')}
                   autoPlay
                   loop
                   style={styles.starAnimation}
                 />
+
+                </View>
   </TouchableOpacity>
 
   <TouchableOpacity 
@@ -607,6 +612,8 @@ const handleAction = async (action) => {
     onPress={() => handleAction('super_like')}
     activeOpacity={0.7}
   >
+        <View style={styles.buttonCircle}>
+
  <LottieView
                   ref={ref => badgeAnimations.current.star = ref}
                   source={require('../../assets/animations/star.json')}
@@ -614,6 +621,7 @@ const handleAction = async (action) => {
                   loop
                   style={styles.starAnimation}
                 />
+                </View>
   </TouchableOpacity>
 
   <TouchableOpacity 
@@ -627,10 +635,17 @@ const handleAction = async (action) => {
     }}
     activeOpacity={0.7}
   >
-    <View style={styles.buttonCircle}>
-      <Ionicons name="heart" size={28} color="#ff4a4a" />
-    </View>
-  </TouchableOpacity>
+        <View style={styles.buttonCircle}>
+
+  <LottieView
+                  ref={ref => badgeAnimations.current.star = ref}
+                  source={require('../../assets/animations/like.json')}
+                  autoPlay
+                  loop
+                  style={styles.starAnimation}
+                />
+  </View></TouchableOpacity>
+  
 </View>
         </LinearGradient>
       </ScrollView>
@@ -699,7 +714,8 @@ const styles = StyleSheet.create({
   limitContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 5,
+    marginBottom:1,
     backgroundColor: 'rgba(255, 88, 100, 0.1)',
     paddingVertical: 6,
     paddingHorizontal: 12,
@@ -717,6 +733,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginVertical: 20,
+    marginTop:60,
     position: 'relative',
   },
   card: {
