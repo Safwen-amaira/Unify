@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, PanResponder, RefreshControl, ScrollView, Modal, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, RefreshControl, ScrollView, Modal, Dimensions, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -10,6 +10,7 @@ import LottieView from 'lottie-react-native';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DEFAULT_IMAGE = require('../../assets/placeholder.jpg');
+const ROTATION_RANGE = 15; // Degrees of rotation when swiping
 
 const MatchScreen = () => {
   const { user, authLoading } = useAuth();
@@ -21,10 +22,12 @@ const MatchScreen = () => {
   const [matchesRemaining, setMatchesRemaining] = useState(0);
   const [selectedBadge, setSelectedBadge] = useState(null);
   const [badgeModalVisible, setBadgeModalVisible] = useState(false);
-  const swipe = useRef(new Animated.ValueXY()).current;
-  const currentIndexRef = useRef(currentIndex);
-  const badgeAnimations = useRef({});
+  const [showLikeAnimation, setShowLikeAnimation] = useState(false);
+  const [showNopeAnimation, setShowNopeAnimation] = useState(false);
+  
+  // Animation refs
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const badgeAnimations = useRef({});
 
   // Animation for badge pulse effect
   useEffect(() => {
@@ -53,14 +56,10 @@ const MatchScreen = () => {
     const fetchInterval = setInterval(() => {
       fetchPotentialMatches();
       checkMatchesLimit();
-    }, 60000); // Update every 2 seconds
+    }, 60000); // Update every minute
 
     return () => clearInterval(fetchInterval);
   }, [user]);
-
-  useEffect(() => {
-    currentIndexRef.current = currentIndex;
-  }, [currentIndex]);
 
   useEffect(() => {
     if (user && !authLoading) {
@@ -93,7 +92,7 @@ const MatchScreen = () => {
       .eq('action', 'like')
       .gte('timestamp', oneHourAgo);
 
-    const remaining = Math.max(0, 10 - (count || 0)); // Increased to 10 likes per hour
+    const remaining = Math.max(0, 10 - (count || 0));
     setMatchesRemaining(remaining);
   };
 
@@ -159,9 +158,8 @@ const MatchScreen = () => {
         query = query.gte('birth_year', minBirthYear).lte('birth_year', maxBirthYear);
       }
 
-      // Add location-based filtering if available
       if (currentUser?.location) {
-        query = query.ilike('location', `%${currentUser.location}%`);
+        query = query.not('location', 'is', null).ilike('location', `%${currentUser.location}%`);
       }
 
       const { data: potentialMatches, error } = await query;
@@ -185,104 +183,94 @@ const MatchScreen = () => {
     fetchPotentialMatches();
     checkMatchesLimit();
   }, []);
+const handleAction = async (action) => {
+  if (profiles.length === 0 || !user) return;
 
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderMove: (_, { dx, dy }) => {
-      swipe.setValue({ x: dx, y: dy });
-    },
-    onPanResponderRelease: (_, { dx, dy }) => {
-      const swipeDirection = Math.sign(dx);
-      const isSwipeValid = Math.abs(dx) > 120;
+  // Check limits based on action type
+  if (action === 'like' && matchesRemaining <= 0) {
+    Alert.alert('Limit Reached', 'You can only like 10 profiles per hour. Upgrade to premium for unlimited likes.');
+    return;
+  }
 
-      if (isSwipeValid) {
-        Animated.timing(swipe, {
-          toValue: { 
-            x: swipeDirection * 500, 
-            y: dy 
-          },
-          duration: 200,
-          useNativeDriver: true,
-        }).start(() => handleSwipeComplete(swipeDirection > 0 ? 'like' : 'pass'));
-      } else {
-        Animated.spring(swipe, {
-          toValue: { x: 0, y: 0 },
-          friction: 5,
-          useNativeDriver: true,
-        }).start();
-      }
-    },
-  });
+  // For super like, check premium status or remaining super likes
+  if (action === 'super_like') {
+    const { data: premiumData } = await supabase
+      .from('profiles')
+      .select('is_premium, super_likes_remaining')
+      .eq('id', user.id)
+      .single();
 
-  const rotateCard = swipe.x.interpolate({
-    inputRange: [-200, 0, 200],
-    outputRange: ['-20deg', '0deg', '20deg'],
-    extrapolate: 'clamp',
-  });
-
-  const likeOpacity = swipe.x.interpolate({
-    inputRange: [0, 150],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-
-  const passOpacity = swipe.x.interpolate({
-    inputRange: [-150, 0],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  const nextCardScale = swipe.x.interpolate({
-    inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH],
-    outputRange: [1, 0.9, 1],
-    extrapolate: 'clamp',
-  });
-
-  const handleSwipeComplete = async (action) => {
-    if (profiles.length === 0 || !user) return;
-
-    if (action === 'like' && matchesRemaining <= 0) {
-      Alert.alert('Limit Reached', 'You can only like 10 profiles per hour. Upgrade to premium for unlimited likes.');
-      Animated.spring(swipe, {
-        toValue: { x: 0, y: 0 },
-        friction: 5,
-        useNativeDriver: true,
-      }).start();
+    if (!premiumData?.is_premium && (premiumData?.super_likes_remaining || 0) <= 0) {
+      Alert.alert('No Super Likes Left', 'You have no super likes remaining. Upgrade to premium for unlimited super likes.');
       return;
     }
+  }
 
-    const swipedProfile = profiles[currentIndexRef.current];
-    
-    try {
-      const { error } = await supabase
-        .from('swipes')
-        .insert({
-          user_id: user.id,
-          target_user_id: swipedProfile.id,
-          action: action,
-          timestamp: new Date().toISOString()
-        });
-
-      if (error) throw error;
-
-      if (action === 'like') {
-        await checkForMatch(swipedProfile.id);
-        setMatchesRemaining(prev => prev - 1);
-      }
-
-      const nextIndex = currentIndexRef.current + 1;
-      if (nextIndex < profiles.length) {
-        setCurrentIndex(nextIndex);
-        swipe.setValue({ x: 0, y: 0 });
-      } else {
-        fetchPotentialMatches();
-      }
-    } catch (error) {
-      console.error('Swipe error:', error);
+  const currentProfile = profiles[currentIndex];
+  
+  try {
+    // Show animation based on action
+    if (action === 'like' || action === 'super_like') {
+      setShowLikeAnimation(true);
+      setTimeout(() => setShowLikeAnimation(false), 1000);
+    } else {
+      setShowNopeAnimation(true);
+      setTimeout(() => setShowNopeAnimation(false), 1000);
     }
-  };
 
+    // Prepare swipe data
+    const swipeData = {
+      user_id: user.id,
+      target_user_id: currentProfile.id,
+      action: action,
+      timestamp: new Date().toISOString(),
+      is_undo: false
+    };
+
+    // Add device info if available
+    // (You would need to implement getDeviceInfo() or use a library like react-native-device-info)
+    // swipeData.device_id = getDeviceId();
+    // swipeData.ip_address = getIpAddress();
+
+    const { error } = await supabase
+      .from('swipes')
+      .insert(swipeData);
+
+    if (error) throw error;
+
+    // Handle post-swipe actions
+    if (action === 'like' || action === 'super_like') {
+      await checkForMatch(currentProfile.id);
+      
+      // Update remaining counts
+      if (action === 'like') {
+        setMatchesRemaining(prev => prev - 1);
+      } else if (action === 'super_like') {
+        // Decrement super like count if not premium
+        const { data: premiumData } = await supabase
+          .from('profiles')
+          .select('is_premium')
+          .eq('id', user.id)
+          .single();
+
+        if (!premiumData?.is_premium) {
+          await supabase.rpc('decrement_super_likes', { user_id: user.id });
+        }
+      }
+    }
+
+    // Move to next profile
+    const nextIndex = currentIndex + 1;
+    if (nextIndex < profiles.length) {
+      setCurrentIndex(nextIndex);
+    } else {
+      fetchPotentialMatches();
+    }
+  } catch (error) {
+    console.error('Action error:', error);
+    Alert.alert('Error', 'Failed to record swipe. Please try again.');
+  }
+};
   const checkForMatch = async (targetUserId) => {
     try {
       const { data, error } = await supabase
@@ -291,12 +279,11 @@ const MatchScreen = () => {
         .eq('user_id', targetUserId)
         .eq('target_user_id', user.id)
         .eq('action', 'like')
-        .single();
+        .maybeSingle(); // Use maybeSingle instead of single to handle no rows
 
       if (error) throw error;
 
       if (data) {
-        // Play match animation
         if (badgeAnimations.current.match) {
           badgeAnimations.current.match.play();
         }
@@ -314,29 +301,13 @@ const MatchScreen = () => {
         });
 
         navigation.navigate('MatchModal', {
-          matchedUser: profiles[currentIndexRef.current],
+          matchedUser: profiles[currentIndex],
           currentUser: user
         });
       }
     } catch (error) {
       console.error('Match check error:', error);
     }
-  };
-
-  const handleActionButton = (action) => {
-    if (profiles.length === 0) return;
-
-    if (action === 'like' && matchesRemaining <= 0) {
-      Alert.alert('Limit Reached', 'You can only like 10 profiles per hour. Upgrade to premium for unlimited likes.');
-      return;
-    }
-
-    const direction = action === 'like' ? 1 : -1;
-    Animated.timing(swipe, {
-      toValue: { x: direction * 500, y: 0 },
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => handleSwipeComplete(action));
   };
 
   const calculateAge = (birthday) => {
@@ -402,14 +373,7 @@ const MatchScreen = () => {
             </Text>
             
             <View style={styles.modalStats}>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>5%</Text>
-                <Text style={styles.statLabel}>of users have this</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statNumber}>3.2x</Text>
-                <Text style={styles.statLabel}>more matches</Text>
-              </View>
+        
             </View>
           </View>
         </TouchableOpacity>
@@ -485,31 +449,45 @@ const MatchScreen = () => {
     }
 
     const profile = profiles[currentIndex];
-    const animatedStyle = {
-      transform: [
-        { translateX: swipe.x },
-        { translateY: swipe.y },
-        { rotate: rotateCard }
-      ]
-    };
-
+    
     return (
       <>
+        {/* Like Animation (shown over all layers) */}
+        {showLikeAnimation && (
+          <View style={styles.overlayAnimationContainer}>
+            <LottieView
+              source={require('../../assets/animations/like.json')}
+              autoPlay
+              loop={false}
+              style={styles.fullScreenAnimation}
+            />
+          </View>
+        )}
+        
+        {/* Nope Animation (shown over all layers) */}
+        {showNopeAnimation && (
+          <View style={styles.overlayAnimationContainer}>
+            <LottieView
+              source={require('../../assets/animations/nope.json')}
+              autoPlay
+              loop={false}
+              style={styles.fullScreenAnimation}
+            />
+          </View>
+        )}
+        
         {profiles.length > currentIndex + 1 && (
-          <Animated.View style={[styles.nextCard, { transform: [{ scale: nextCardScale }] }]}>
+          <View style={styles.nextCard}>
             <Image 
               source={profiles[currentIndex + 1].profile_image ? 
                 { uri: profiles[currentIndex + 1].profile_image } : DEFAULT_IMAGE}
               style={styles.cardImage}
               resizeMode="cover"
             />
-          </Animated.View>
+          </View>
         )}
         
-        <Animated.View 
-          style={[styles.card, animatedStyle]} 
-          {...panResponder.panHandlers}
-        >
+        <View style={styles.card}>
           <Image 
             source={profile.profile_image ? { uri: profile.profile_image } : DEFAULT_IMAGE}
             style={styles.cardImage}
@@ -574,27 +552,7 @@ const MatchScreen = () => {
               </TouchableOpacity>
             ))}
           </View>
-          
-          <Animated.View style={[styles.likeBadge, { opacity: likeOpacity }]}>
-            <LottieView
-              ref={ref => badgeAnimations.current.like = ref}
-              source={require('../../assets/animations/like.json')}
-              autoPlay={false}
-              loop={false}
-              style={styles.badgeAnimation}
-            />
-          </Animated.View>
-          
-          <Animated.View style={[styles.passBadge, { opacity: passOpacity }]}>
-            <LottieView
-              ref={ref => badgeAnimations.current.pass = ref}
-              source={require('../../assets/animations/pass.json')}
-              autoPlay={false}
-              loop={false}
-              style={styles.badgeAnimation}
-            />
-          </Animated.View>
-        </Animated.View>
+        </View>
       </>
     );
   };
@@ -630,44 +588,50 @@ const MatchScreen = () => {
           <View style={styles.cardContainer}>
             {renderCard()}
           </View>
+<View style={styles.actions}>
+  <TouchableOpacity 
+    style={styles.actionButton} 
+    onPress={() => handleAction('pass')}
+    activeOpacity={0.7}
+  > <LottieView
+                  ref={ref => badgeAnimations.current.star = ref}
+                  source={require('../../assets/animations/nope.json')}
+                  autoPlay
+                  loop
+                  style={styles.starAnimation}
+                />
+  </TouchableOpacity>
 
-          <View style={styles.actions}>
-            <TouchableOpacity 
-              style={styles.actionButton} 
-              onPress={() => handleActionButton('pass')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.buttonCircle, styles.passButton]}>
-                <Ionicons name="close" size={32} color="white" />
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.actionButton} 
-              onPress={() => navigation.navigate('Premium')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.buttonCircle, styles.superLikeButton]}>
-                <LottieView
+  <TouchableOpacity 
+    style={styles.actionButton} 
+    onPress={() => handleAction('super_like')}
+    activeOpacity={0.7}
+  >
+ <LottieView
                   ref={ref => badgeAnimations.current.star = ref}
                   source={require('../../assets/animations/star.json')}
                   autoPlay
                   loop
                   style={styles.starAnimation}
                 />
-              </View>
-            </TouchableOpacity>
+  </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={styles.actionButton} 
-              onPress={() => handleActionButton('like')}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.buttonCircle, styles.likeButton]}>
-                <Ionicons name="heart" size={28} color="white" />
-              </View>
-            </TouchableOpacity>
-          </View>
+  <TouchableOpacity 
+    style={styles.actionButton} 
+    onPress={() => {
+      if (matchesRemaining <= 0) {
+        Alert.alert('Limit Reached', 'You can only like 10 profiles per hour. Upgrade to premium for unlimited likes.');
+        return;
+      }
+      handleAction('like');
+    }}
+    activeOpacity={0.7}
+  >
+    <View style={styles.buttonCircle}>
+      <Ionicons name="heart" size={28} color="#ff4a4a" />
+    </View>
+  </TouchableOpacity>
+</View>
         </LinearGradient>
       </ScrollView>
       
@@ -677,7 +641,7 @@ const MatchScreen = () => {
             name: 'Discover',
             icon: 'home',
             isActive: true,
-            onPress: () => navigation.navigate('Discover'),
+            onPress: () => navigation.navigate('MatchScreen'),
           },
           {
             name: 'Messages',
@@ -692,10 +656,10 @@ const MatchScreen = () => {
             onPress: () => navigation.navigate('Matches'),
           },
           {
-            name: 'Profile',
-            icon: 'person',
+            name: 'Settings',
+            icon: 'settings',
             isActive: false,
-            onPress: () => navigation.navigate('Profile'),
+            onPress: () => navigation.navigate('Settings'),
           },
         ]}
       />
@@ -713,7 +677,7 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
-    paddingBottom: 80, // Space for navbar
+    paddingBottom: 80,
   },
   container: {
     flex: 1,
@@ -856,24 +820,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: 'HelveticaNowDisplay-Medium',
   },
-  likeBadge: {
-    position: 'absolute',
-    top: 40,
-    left: 20,
-    width: 100,
-    height: 100,
-  },
-  passBadge: {
-    position: 'absolute',
-    top: 40,
-    right: 20,
-    width: 100,
-    height: 100,
-  },
-  badgeAnimation: {
-    width: '100%',
-    height: '100%',
-  },
   actions: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -881,7 +827,8 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   actionButton: {
-    padding: 15,
+    padding: 0,
+  
   },
   buttonCircle: {
     width: 70,
@@ -889,28 +836,9 @@ const styles = StyleSheet.create({
     borderRadius: 35,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'white',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  likeButton: {
-    backgroundColor: '#4CAF50',
-  },
-  passButton: {
-    backgroundColor: '#FF3E4D',
-  },
-  superLikeButton: {
-    backgroundColor: '#00C9FF',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-  },
-  starAnimation: {
-    width: 80,
-    height: 80,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   loadingCard: {
     width: SCREEN_WIDTH * 0.9,
@@ -985,7 +913,10 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
   },
-  // Modal styles
+  starAnimation: {
+    width: 60,
+    height: 60,
+  },
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
@@ -1072,6 +1003,21 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.6)',
     marginTop: 5,
     fontFamily: 'HelveticaNowDisplay-Regular',
+  },
+  overlayAnimationContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+    backgroundColor: 'transparent',
+  },
+  fullScreenAnimation: {
+    width: '100%',
+    height: '100%',
   },
 });
 
