@@ -9,6 +9,9 @@ import ResetPasswordScreen from '../screens/reset-password';
 import MatchScreen from '../screens/MatchScreen';
 import CompleteProfileScreen from '../screens/CompleteProfileScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import ConversationList from '../screens/ConversationList';
+import ChatScreen from '../screens/ChatScreen';
+import MatchModal from '../screens/MatchModal';
 
 const Stack = createStackNavigator();
 
@@ -29,8 +32,11 @@ export default function MainNavigator({ initialRoute = 'Onboarding' }) {
       <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
       <Stack.Screen name="MatchScreen" component={MatchScreen} />
       <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
-     <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="Conversations" component={ConversationList} />
+      <Stack.Screen name="Chat" component={ChatScreen} />
 
+     <Stack.Screen name="Settings" component={SettingsScreen} />
+     <Stack.Screen name ='MatchModal' component={MatchModal}/>
     </Stack.Navigator>
   );
 }

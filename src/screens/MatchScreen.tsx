@@ -271,44 +271,52 @@ const handleAction = async (action) => {
     Alert.alert('Error', 'Failed to record swipe. Please try again.');
   }
 };
-  const checkForMatch = async (targetUserId) => {
-    try {
-      const { data, error } = await supabase
-        .from('swipes')
-        .select('*')
-        .eq('user_id', targetUserId)
-        .eq('target_user_id', user.id)
-        .eq('action', 'like')
-        .maybeSingle(); // Use maybeSingle instead of single to handle no rows
 
-      if (error) throw error;
 
-      if (data) {
-        if (badgeAnimations.current.match) {
-          badgeAnimations.current.match.play();
-        }
-        
-        await supabase.from('matches').insert({
-          user1_id: user.id,
-          user2_id: targetUserId,
-          matched_at: new Date().toISOString()
-        });
-        
-        await supabase.from('conversations').insert({
+const checkForMatch = async (targetUserId) => {
+  try {
+    const { data, error } = await supabase
+      .from('swipes')
+      .select('*')
+      .eq('user_id', targetUserId)
+      .eq('target_user_id', user.id)
+      .eq('action', 'like')
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (data) {
+      // Create match record
+      await supabase.from('matches').insert({
+        user1_id: user.id,
+        user2_id: targetUserId,
+        matched_at: new Date().toISOString()
+      });
+      
+      // Create conversation and get the conversation ID
+      const { data: conversation, error: convError } = await supabase
+        .from('conversations')
+        .insert({
           user1_id: user.id,
           user2_id: targetUserId,
           last_message_at: new Date().toISOString()
-        });
+        })
+        .select()
+        .single();
 
-        navigation.navigate('MatchModal', {
-          matchedUser: profiles[currentIndex],
-          currentUser: user
-        });
-      }
-    } catch (error) {
-      console.error('Match check error:', error);
+      if (convError) throw convError;
+
+      // Navigate to MatchModal with all needed data
+      navigation.navigate('MatchModal', {
+        matchedUser: profiles[currentIndex],
+        currentUser: user,
+        conversationId: conversation.id
+      });
     }
-  };
+  } catch (error) {
+    console.error('Match check error:', error);
+  }
+};
 
   const calculateAge = (birthday) => {
     if (!birthday) return '?';
@@ -662,7 +670,7 @@ const handleAction = async (action) => {
             name: 'Messages',
             icon: 'chatbubbles',
             isActive: false,
-            onPress: () => navigation.navigate('Messages'),
+            onPress: () => navigation.navigate('Conversations'),
           },
           {
             name: 'Matches',
