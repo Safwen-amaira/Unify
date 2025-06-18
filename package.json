@@ -19,7 +19,7 @@
     "expo-file-system": "~18.1.10",
     "expo-haptics": "^14.1.4",
     "expo-image-picker": "~16.1.4",
-    "expo-linear-gradient": "^14.1.5",
+    "expo-linear-gradient": "~14.1.5",
     "expo-media-library": "~17.1.7",
     "expo-router": "~5.0.7",
     "expo-secure-store": "~14.2.3",
