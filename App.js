@@ -7,6 +7,7 @@ import { supabase } from './src/lib/supabase';
 import MainNavigator from './src/navigation/MainNavigator';
 import SplashScreen from './src/screens/SplashScreen';
 import { AuthProvider } from './src/context/AuthContext';
+import 'expo-linear-gradient';
 
 export default function App() {
   const [appState, setAppState] = useState({

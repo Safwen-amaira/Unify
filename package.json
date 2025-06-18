@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.1.2",
+    "@react-native-masked-view/masked-view": "0.3.2",
     "@react-native-picker/picker": "^2.11.0",
+    "@react-navigation/native": "^7.1.11",
     "@react-navigation/stack": "^7.3.3",
     "@supabase/supabase-js": "^2.50.0",
     "expo": "53.0.10",
@@ -25,11 +27,12 @@
     "expo-secure-store": "~14.2.3",
     "expo-status-bar": "~2.2.3",
     "firebase": "^11.9.0",
-    "lottie-react-native": "^7.2.2",
+    "lottie-react-native": "7.2.2",
     "react": "19.0.0",
     "react-native": "0.79.3",
     "react-native-gesture-handler": "~2.24.0",
     "react-native-get-random-values": "~1.11.0",
+    "react-native-linear-gradient": "^2.8.3",
     "react-native-reanimated": "~3.17.4",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
@@ -41,6 +44,7 @@
   "devDependencies": {
     "@babel/core": "^7.20.0",
     "@types/react": "~19.0.10",
+    "@types/react-native": "^0.72.8",
     "typescript": "~5.8.3"
   },
   "private": true
